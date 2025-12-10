@@ -1,0 +1,11 @@
+wave_controller:
+  ros__parameters:
+    default_amplitude: 45.0
+    default_frequency: 1.0
+    max_amplitude: 90.0
+    min_amplitude: 10.0
+    motor_mappings:
+      left_arm: [1, 2, 3]
+      right_arm: [4, 5, 6]
+    log_level: "info"
+    log_file_path: "/tmp/wave_logs/"
