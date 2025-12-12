@@ -88,20 +88,46 @@ sudo su
 cd /home/niic/Desktop/arm_control/arm_control2_test/ros2_ws
 source install/setup.bash
 ros2 run wave_control_system test_playback
+
+备注: 支持往话题/playback_control 中发送停止命令。例如：ros2 topic pub --once /playback_control std_msgs/String "data: 'stop'" 
 ```
 
 **交互流程**:
 ```
-可用的轨迹文件:
-  1. wave_motion
-  2. pick_and_place
-  
-请输入要回放的轨迹名称（不含.json后缀）: wave_motion
-请输入回放速度倍数 (默认1.0): 1.5
-是否循环播放? (y/n, 默认n): n
+选择播放模式:
+  1 - 单轨迹播放
+  2 - 序列播放（3段）
+请选择 (1/2, 默认1): 2
+[INFO] [1765521754.322397870] [trajectory_playback_tester]: 
+=== 序列播放配置 ===
+第一段轨迹名称（抬起，默认 raise_arm）: test1
+第二段轨迹名称（摆手，默认 wave_motion）: test2
+第三段轨迹名称（回零，默认 return_zero）: test3
+是否循环第二段？(y/n, 默认 y): 
+[INFO] [1765521762.301109668] [trajectory_playback_tester]: 
+配置:
+[INFO] [1765521762.301403433] [trajectory_playback_tester]:   段1: test1
+[INFO] [1765521762.301583845] [trajectory_playback_tester]:   段2: test2 (循环=True)
+[INFO] [1765521762.301752589] [trajectory_playback_tester]:   段3: test3
+按 Enter 开始...
+[INFO] [1765521763.794054182] [trajectory_playback_tester]: 
+[1/3] 播放抬起段...
+[INFO] [1765521763.794341693] [trajectory_playback_tester]: Playing: test1
+[INFO] [1765521765.800167273] [trajectory_playback_tester]: 
+[2/3] 播放摆手段...
+[INFO] [1765521765.800415439] [trajectory_playback_tester]: Playing: test2
+[INFO] [1765521765.807316501] [trajectory_playback_tester]: 循环播放中... 按Enter、Ctrl+C或发送stop继续到第三段
+^C[INFO] [1765521776.324659522] [trajectory_playback_tester]: 
+收到 Ctrl+C，将在完成当前循环后继续...
+[INFO] [1765521776.325082516] [trajectory_playback_tester]: 发送停止信号...
+[INFO] [1765521776.427212562] [trajectory_playback_tester]: 等待当前循环完成（约1.9秒）...
+[INFO] [1765521778.830365803] [trajectory_playback_tester]: 
+[3/3] 播放回零段...
+[INFO] [1765521778.830613357] [trajectory_playback_tester]: Playing: test3
+[INFO] [1765521778.831181244] [trajectory_playback_tester]: Stop requested
+[INFO] [1765521780.844348362] [trajectory_playback_tester]: 
+=== 序列播放完成 ===
 
-✓ 回放已开始
-回放进行中...
 ```
 
 ## 高级使用

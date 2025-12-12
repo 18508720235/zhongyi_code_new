@@ -11,6 +11,7 @@ from rclpy.executors import MultiThreadedExecutor
 from wave_control_msgs.msg import JointTrajectory, TeachRecord, WaveStatus
 from wave_control_msgs.srv import TeachControl
 from sensor_msgs.msg import JointState
+from std_msgs.msg import String
 import json
 import threading
 import time
@@ -105,6 +106,18 @@ class TeachManagerReal(Node):
             10
         )
 
+        # 播放控制订阅者（用于停止播放）
+        self.playback_control_sub = self.create_subscription(
+            String,
+            'playback_control',
+            self.playback_control_callback,
+            10,
+            callback_group=self.subscription_callback_group
+        )
+
+        # 停止标志
+        self.stop_requested = False
+
         # 定时器
         self.record_timer = None
         self.playback_timer = None
@@ -196,6 +209,12 @@ class TeachManagerReal(Node):
             positions = [base_angle * 0.5] * self.num_joints
 
         return positions
+
+    def playback_control_callback(self, msg):
+        """处理播放控制命令"""
+        if msg.data == "stop":
+            self.stop_requested = True
+            self.get_logger().info("Stop requested, will stop after current loop")
 
     def handle_teach_control(self, request, response):
         """处理示教控制服务请求"""
@@ -496,6 +515,13 @@ class TeachManagerReal(Node):
 
         if elapsed_time >= trajectory_duration:
             if self.loop_playback:
+                # 检查停止请求 - 在循环结束时检查
+                if self.stop_requested:
+                    self.get_logger().info("Stopping playback gracefully after completing loop")
+                    self.stop_playback()
+                    self.stop_requested = False
+                    return
+                
                 # 循环播放
                 self.playback_start_time = current_time
                 elapsed_time = 0.0
