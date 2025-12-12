@@ -46,6 +46,7 @@ cd /home/niic/Desktop/arm_control/arm_control2_test/ros2_ws
 source install/setup.bash
 ros2 launch wave_control_system teach_real.launch.py
 ```
+**备注：模拟真实电机测试，需要在新开一个 终端 3 -运行 ros2 run wave_control_system mock_joint_publisher（模拟发布关节数据，真机中忽略该步骤）**
 
 **终端 2 - 运行录制程序**:
 ```bash
@@ -54,7 +55,6 @@ cd /home/niic/Desktop/arm_control/arm_control2_test/ros2_ws
 source install/setup.bash
 ros2 run wave_control_system test_teach_real
 ```
-**备注：模拟真实电机测试，需要在新开一个 终端 3 -运行 ros2 run wave_control_system mock_joint_publisher（模拟发布关节数据，真机中忽略该步骤）**
 查看 话题： /joint_states_pub 是否有数据发布
 后续和其他部分一样
 
