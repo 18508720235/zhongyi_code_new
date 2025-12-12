@@ -31,7 +31,7 @@
 
 ```bash
 cd ~/Desktop/arm_control/arm_control2_test/ros2_ws
-colcon build --packages-select wave_control_system
+colcon build
 source install/setup.bash
 ```
 
