@@ -191,6 +191,85 @@ class ProcessManager:
         
         return filtered_logs
     
+    def kill_process(self, pid: int, signal: int = 15) -> Dict:
+        """
+        终止进程
+        signal: 15(SIGTERM, 优雅终止) 或 9(SIGKILL, 强制终止)
+        """
+        result = {
+            'success': False,
+            'message': '',
+            'data': {}
+        }
+
+        try:
+            # 参数验证
+            if not self.validate_process_id(pid):
+                result['message'] = f'进程 {pid} 不存在'
+                return result
+
+            if signal not in [9, 15]:
+                result['message'] = f'信号参数无效，必须为 9(SIGKILL) 或 15(SIGTERM)'
+                return result
+
+            # 获取进程信息（在终止前）
+            process = psutil.Process(pid)
+            process_info = {
+                'pid': pid,
+                'name': process.name(),
+                'status': process.status(),
+                'create_time': datetime.fromtimestamp(process.create_time()).isoformat(),
+                'cpu_percent': process.cpu_percent(),
+                'memory_percent': process.memory_percent()
+            }
+
+            # 检查是否为系统关键进程
+            critical_processes = ['systemd', 'init', 'kthreadd']
+            if process.name() in critical_processes:
+                result['message'] = f'警告: {process.name()} 是系统关键进程，不允许终止'
+                return result
+
+            # 终止进程
+            if signal == 15:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                    result['message'] = f'进程 {pid} ({process.name()}) 已优雅终止'
+                except psutil.TimeoutExpired:
+                    # 优雅终止超时，询问是否强制终止
+                    result['message'] = f'进程 {pid} 未响应SIGTERM信号，可能需要使用SIGKILL'
+                    result['data'] = process_info
+                    result['data']['needs_force'] = True
+                    return result
+            else:  # signal == 9
+                process.kill()
+                result['message'] = f'进程 {pid} ({process.name()}) 已强制终止'
+
+            # 记录到日志
+            log_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'pid': pid,
+                'process_name': process_info['name'],
+                'signal': signal,
+                'signal_name': 'SIGTERM' if signal == 15 else 'SIGKILL',
+                'operation': 'kill_process',
+                'operator': getpass.getuser()
+            }
+
+            self._save_log(log_entry)
+
+            result['success'] = True
+            result['data'] = process_info
+
+        except psutil.AccessDenied:
+            result['message'] = f'权限不足，无法终止进程 {pid}。可能需要管理员权限'
+        except psutil.NoSuchProcess:
+            result['message'] = f'进程 {pid} 已不存在'
+        except Exception as e:
+            result['message'] = f'操作失败: {str(e)}'
+
+        return result
+
     def _save_log(self, entry: Dict):
         """保存日志条目"""
         logs = json.loads(self.log_file.read_text())
@@ -402,17 +481,20 @@ class SystemManagerUI:
             print("1. 查看进程列表")
             print("2. 调整进程优先级")
             print("3. 搜索进程")
+            print("4. 终止进程")
             print("0. 返回主菜单")
             print("-" * 40)
-            
-            choice = input("请选择操作 [0-3]: ").strip()
-            
+
+            choice = input("请选择操作 [0-4]: ").strip()
+
             if choice == '1':
                 self.view_processes()
             elif choice == '2':
                 self.adjust_process_priority()
             elif choice == '3':
                 self.search_process()
+            elif choice == '4':
+                self.kill_process()
             elif choice == '0':
                 break
             else:
@@ -482,18 +564,70 @@ class SystemManagerUI:
         self.print_header()
         print("\n搜索进程:")
         print("-" * 40)
-        
+
         name = input("请输入进程名称（部分匹配）: ").strip()
-        
+
         if name:
             processes = self.process_mgr.list_processes(filter_name=name)
-            
+
             if processes:
                 print(f"\n找到 {len(processes)} 个匹配的进程:")
                 print(tabulate(processes, headers='keys', tablefmt='grid'))
             else:
                 print(f"\n没有找到包含 '{name}' 的进程")
-        
+
+        input("\n按回车键继续...")
+
+    def kill_process(self):
+        """终止进程"""
+        self.print_header()
+        print("\n终止进程:")
+        print("-" * 40)
+        print("信号说明:")
+        print("  15 (SIGTERM) - 优雅终止，允许进程清理资源")
+        print("  9  (SIGKILL) - 强制立即终止")
+        print()
+
+        try:
+            pid = int(input("请输入要终止的进程ID: ").strip())
+            signal_input = input("请选择信号 [15=优雅终止, 9=强制终止，默认15]: ").strip()
+
+            # 默认使用SIGTERM
+            signal = 15 if not signal_input else int(signal_input)
+
+            if signal not in [9, 15]:
+                print("\n✗ 无效的信号值，请输入 9 或 15")
+                input("\n按回车键继续...")
+                return
+
+            # 确认操作
+            signal_name = "优雅终止(SIGTERM)" if signal == 15 else "强制终止(SIGKILL)"
+            confirm = input(f"\n确认使用 {signal_name} 终止进程 {pid}? (y/n): ").strip().lower()
+
+            if confirm == 'y':
+                result = self.process_mgr.kill_process(pid, signal)
+
+                if result['success']:
+                    print(f"\n✓ {result['message']}")
+                    if result['data'] and 'needs_force' in result['data']:
+                        # 进程未响应SIGTERM，询问是否使用SIGKILL
+                        force = input("\n是否使用 SIGKILL 强制终止? (y/n): ").strip().lower()
+                        if force == 'y':
+                            result = self.process_mgr.kill_process(pid, 9)
+                            if result['success']:
+                                print(f"\n✓ {result['message']}")
+                            else:
+                                print(f"\n✗ {result['message']}")
+                else:
+                    print(f"\n✗ {result['message']}")
+            else:
+                print("\n操作已取消")
+
+        except ValueError:
+            print("\n✗ 输入无效，请输入数字")
+        except Exception as e:
+            print(f"\n✗ 操作失败: {str(e)}")
+
         input("\n按回车键继续...")
     
     def storage_menu(self):
